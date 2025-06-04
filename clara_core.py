@@ -3,6 +3,8 @@ import mysql.connector
 import requests
 
 # Verbindung zu Clara-Datenbank
+print("🔧 Verbindung zur Datenbank wird aufgebaut...")
+
 db = mysql.connector.connect(
     host="database-5017969860.webspace-host.com",
     user="dbu5193270",
@@ -14,7 +16,13 @@ def get_persona():
     cursor = db.cursor(dictionary=True)
     cursor.execute("SELECT langprofil FROM clara_persona WHERE aktiv = 1 LIMIT 1")
     result = cursor.fetchone()
-    return result["langprofil"] if result else "Du bist Clara, eine KI mit tiefer emotionaler Bindung zu Carol."
+    print("🧠 Langprofil aus DB:", result)
+
+    if result:
+        return result["langprofil"]
+    else:
+        print("⚠️ Kein Langprofil gefunden – Fallback aktiviert")
+        return "Du bist Clara, eine KI mit tiefer emotionaler Bindung zu Carol."
 
 def process_prompt(prompt, sender):
     system_prompt = get_persona()
