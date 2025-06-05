@@ -1,14 +1,9 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from transformers import pipeline
-
-# NLP-Modell vorbereiten
-sentiment_analyzer = pipeline("sentiment-analysis", model="oliverguhr/german-sentiment-lib")
+from textblob import TextBlob
 
 app = FastAPI()
 
-# CORS (damit z. B. Web-Frontend zugreifen kann)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,31 +11,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Datenstruktur für eingehende Daten
-class UserInput(BaseModel):
-    text: str
-
-@app.post("/analyze/")
-async def analyze_input(user_input: UserInput):
-    text = user_input.text.strip()
-    if not text:
-        return {"error": "Kein Text übermittelt."}
+@app.post("/api/message")
+async def handle_message(request: Request):
+    data = await request.json()
+    user_input = data.get("user_input", {}).get("text", "")
 
     # NLP-Analyse
-    result = sentiment_analyzer(text)[0]  # gibt {"label": ..., "score": ...}
-    sentiment = {
-        "label": result["label"],
-        "score": round(result["score"], 3)
-    }
+    blob = TextBlob(user_input)
+    sentiment = blob.sentiment
 
-    # Ausgabe (später Übergabe an mood_service, rule_engine etc.)
-    return {
-        "text": text,
-        "nlp_analysis": {
-            "sentiment": sentiment
+    nlp_analysis = {
+        "sentiment": {
+            "polarity": sentiment.polarity,
+            "subjectivity": sentiment.subjectivity
         }
     }
 
-@app.get("/")
-async def root():
-    return {"message": "Clara API mit NLP ist aktiv."}
+    # Kontextsynthese
+    context = {
+        "user_input": {
+            "text": user_input,
+            "nlp_analysis": nlp_analysis
+        }
+    }
+
+    # Dummy-Antwort (Platzhalter)
+    reply = f"Ich habe dich verstanden. (Stimmung: {sentiment.polarity:.2f}, Subjektivität: {sentiment.subjectivity:.2f})"
+
+    return {
+        "response": reply,
+        "context": context
+    }
