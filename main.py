@@ -1,60 +1,51 @@
 from fastapi import FastAPI
-from nlp_model import analyze_sentiment
-from textblob import TextBlob
 import mysql.connector
-import os
+from transformers import pipeline
+from textblob import TextBlob
 
 app = FastAPI()
 
+# NLP-Modell laden (transformers)
+sentiment_analyzer = pipeline("sentiment-analysis", model="oliverguhr/german-sentiment-bert")
+
+# Datenbankverbindung
+def get_db_connection():
+    return mysql.connector.connect(
+        host="database-5017969860.webspace-host.com",
+        user="dbu5193270",
+        password="Cl@r@Ell1ngs",
+        database="dbs14293103"
+    )
 
 @app.get("/")
-def root_check():
+def home():
     return {"message": "Clara API läuft"}
 
+@app.get("/nlp/test")
+def test_nlp():
+    text = "Ich bin sehr enttäuscht von deinem Verhalten."
+    result = sentiment_analyzer(text)[0]
+    return {
+        "text": text,
+        "sentiment": result["label"],
+        "score": round(result["score"], 4)
+    }
 
-@app.get("/diagnose/api")
-def check_api():
-    return {"status": "ok", "info": "API erreichbar"}
+@app.get("/nlp/textblob")
+def test_textblob():
+    tb = TextBlob("Das ist ein fantastischer Tag!")
+    return {
+        "polarity": tb.sentiment.polarity,
+        "subjectivity": tb.sentiment.subjectivity
+    }
 
-
-@app.get("/diagnose/nlp")
-def check_nlp():
+@app.get("/db/test")
+def test_db():
     try:
-        test = analyze_sentiment("Ich bin sehr glücklich.")
-        return {"status": "ok", "result": test}
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SHOW TABLES")
+        tables = cursor.fetchall()
+        return {"status": "OK", "tables": tables}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-
-@app.get("/diagnose/textblob")
-def check_textblob():
-    try:
-        blob = TextBlob("Test")
-        lang = blob.detect_language() if hasattr(blob, "detect_language") else "unbekannt"
-        return {"status": "ok", "language": lang}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-
-@app.get("/diagnose/database")
-def check_db():
-    try:
-        conn = mysql.connector.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            user=os.getenv("DB_USER", "root"),
-            password=os.getenv("DB_PASSWORD", ""),
-            database=os.getenv("DB_NAME", "")
-        )
-        conn.close()
-        return {"status": "ok", "info": "Verbindung erfolgreich"}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-
-@app.post("/clara")
-def clara_response(message: str):
-    try:
-        sentiment = analyze_sentiment(message)
-        return {"antwort": f"Clara hat verstanden: '{message}'", "emotion": sentiment}
-    except Exception as e:
-        return {"error": str(e)}
+        return {"status": "ERROR", "details": str(e)}
