@@ -1,20 +1,19 @@
-from transformers import pipeline
-
-# Initialisiere das Sentiment-Analyse-Modell
-sentiment_analyzer = pipeline(
-    "sentiment-analysis",
-    model="oliverguhr/german-sentiment-bert"
-)
+from textblob import TextBlob
 
 def analyze_sentiment(text):
     if not text:
         return None
     try:
-        result = sentiment_analyzer(text)[0]
+        blob = TextBlob(text)
+        polarity = blob.sentiment.polarity
+        subjectivity = blob.sentiment.subjectivity
+        label = "POSITIVE" if polarity > 0 else "NEGATIVE" if polarity < 0 else "NEUTRAL"
+
         return {
             "sentiment": {
-                "label": result["label"],
-                "score": round(result["score"], 4)
+                "label": label,
+                "polarity": round(polarity, 3),
+                "subjectivity": round(subjectivity, 3)
             }
         }
     except Exception as e:
