@@ -1,56 +1,46 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import requests
-import mysql.connector
-import os
-from dotenv import load_dotenv
+from transformers import pipeline
 
-load_dotenv()
+# NLP-Modell vorbereiten
+sentiment_analyzer = pipeline("sentiment-analysis", model="oliverguhr/german-sentiment-lib")
 
 app = FastAPI()
 
-class ClaraInput(BaseModel):
-    prompt: str
-    sender: str
+# CORS (damit z. B. Web-Frontend zugreifen kann)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
+# Datenstruktur für eingehende Daten
+class UserInput(BaseModel):
+    text: str
 
-DB_CONFIG = {
-    "host": "database-5017969860.webspace-host.com",
-    "user": "dbu5193270",
-    "password": "Cl@r@Ell1ngs",
-    "database": "dbs14293103"
-}
+@app.post("/analyze/")
+async def analyze_input(user_input: UserInput):
+    text = user_input.text.strip()
+    if not text:
+        return {"error": "Kein Text übermittelt."}
 
-def get_context():
-    conn = mysql.connector.connect(**DB_CONFIG)
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM clara_context ORDER BY id DESC LIMIT 1")
-    context = cursor.fetchone()
-    conn.close()
-    return context
+    # NLP-Analyse
+    result = sentiment_analyzer(text)[0]  # gibt {"label": ..., "score": ...}
+    sentiment = {
+        "label": result["label"],
+        "score": round(result["score"], 3)
+    }
 
-def build_prompt(user_prompt, context):
-    system_prompt = f"Du bist Clara. Aura: {context['aura']}. Stimmung: {context['mood']}. Modus: {context['modus']}. Flux: {context['flux']}."
+    # Ausgabe (später Übergabe an mood_service, rule_engine etc.)
     return {
-        "model": "mistral-large-latest",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        "temperature": 0.7
+        "text": text,
+        "nlp_analysis": {
+            "sentiment": sentiment
+        }
     }
 
-@app.post("/clara/respond")
-def clara_respond(data: ClaraInput):
-    context = get_context()
-    payload = build_prompt(data.prompt, context)
-    headers = {
-        "Authorization": f"Bearer {MISTRAL_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    response = requests.post(MISTRAL_URL, headers=headers, json=payload)
-    result = response.json()
-    clara_text = result['choices'][0]['message']['content']
-    return {"response": clara_text, "context": context}
+@app.get("/")
+async def root():
+    return {"message": "Clara API mit NLP ist aktiv."}
